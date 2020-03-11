@@ -1,0 +1,8 @@
+apiVersion: tmax.co.kr/v1
+kind: Token
+metadata:
+	labels: 
+    user: wymin2-tmax.co.kr
+  name: wymin2-tmax.co.kr-fe4e99de-85f1-4f2f-b23d-f8d597141cc2
+accessToken: b3c862382d1165841e6ac87a0dab3d00b64859d803af4591c5d149bbe4259803
+refreshToken: df095e253f3dc81f12b6a10967b88ee0dbb38c4072607093939eaa046dca630b

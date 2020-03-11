@@ -1,0 +1,16 @@
+apiVersion: tmax.co.kr/v1
+kind: User
+metadata: 
+  name: TestUser
+  labels: 
+    app: test
+    encrypt: f
+userInfo:
+  name: wymin
+  password: "1234"
+  email: wymin@tmax.co.kr
+  department: CK2-4
+  position: developer
+  phone: 010-5730-8221
+  description: For test
+status: active

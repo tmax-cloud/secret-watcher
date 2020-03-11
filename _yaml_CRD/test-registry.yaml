@@ -1,0 +1,10 @@
+apiVersion: tmax.co.kr/v1
+kind: Registry
+metadata: 
+  name: TestUser
+  namespace: default
+spec:
+  name: yun-registry
+  description: test
+  shared: true
+  storageSize: "10Gi"
