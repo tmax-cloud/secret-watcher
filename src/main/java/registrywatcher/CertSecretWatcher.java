@@ -23,7 +23,7 @@ import io.kubernetes.client.openapi.models.V1Secret;
 import io.kubernetes.client.util.Watch;
 
 public class CertSecretWatcher extends Thread {
-	private final Watch<V1Secret> watch;
+	private Watch<V1Secret> watch;
 	private ExecutorService executorService;
 	
 //	private static Logger logger = MainWatcher.logger;
