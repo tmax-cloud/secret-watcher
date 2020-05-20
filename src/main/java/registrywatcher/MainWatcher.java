@@ -9,11 +9,10 @@ import java.io.StringWriter;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import io.kubernetes.client.openapi.ApiClient;
 import io.kubernetes.client.openapi.Configuration;
@@ -27,82 +26,119 @@ public class MainWatcher {
 //	public static Logger logger = LoggerFactory.getLogger("RegWatcher");
 	
 	// gSecretMap: To also delete the certificate directory when the registry is cleared
-	public static Map<String, String> gSecretMap = new HashMap<>();	// <registryName, ipPort>
+	public static Map<String, List<String>> gSecretMap = new HashMap<>();	// <registryName, ipPort>
 	
 	private static ApiClient k8sClient;
 	private static CoreV1Api api;
 	
 	public static void main(String[] args) {
-		System.out.println("Secret Main Watcher Start");
-		
-		try { 
-			k8sClient = Config.fromCluster();
-			k8sClient.setConnectTimeout(0);
-			k8sClient.setReadTimeout(0);
-			k8sClient.setWriteTimeout(0);		
-			Configuration.setDefaultApiClient(k8sClient);
-
-			api = new CoreV1Api();
+		while(true) {
+			CertSecretWatcher certSecretWatcher = null;
 			
-			// Get Latest Resource Version & Create Cert Files
-			V1SecretList certSecretList = api.listSecretForAllNamespaces(null, null, null, "secret=cert", null, null, null, null, Boolean.FALSE);
-			int certSecretLatestResourceVersion = 0;
-			deleteBaseDirectory();
-			createBaseDirectory();
-			for(V1Secret secret : certSecretList.getItems()) {
-				int secretResourceVersion = Integer.parseInt(secret.getMetadata().getResourceVersion());
-				certSecretLatestResourceVersion = (certSecretLatestResourceVersion >= secretResourceVersion) ? certSecretLatestResourceVersion : secretResourceVersion;
-				
-				Map<String, byte[]> secretMap = secret.getData();
-				String ipPort = new String(secretMap.get("REGISTRY_IP_PORT"));
-				final String CERT_DIR = Constants.DOCKER_CERT_DIR + "/" + ipPort;
-				
-				try {
-					createDirectory(CERT_DIR);
-					System.out.println("write filename: " + CERT_DIR + "/" + Constants.CERT_KEY_FILE);
-					try ( BufferedWriter writer = new BufferedWriter(new FileWriter(CERT_DIR + "/" + Constants.CERT_KEY_FILE)) ) {
-						writer.write(new String(secretMap.get(Constants.CERT_KEY_FILE)));
+			System.out.println("Secret Main Watcher Start");
+			
+			try { 
+				k8sClient = Config.fromCluster();
+				k8sClient.setConnectTimeout(0);
+				k8sClient.setReadTimeout(0);
+				k8sClient.setWriteTimeout(0);
+				Configuration.setDefaultApiClient(k8sClient);
+
+				api = new CoreV1Api();
+
+				// Get Latest Resource Version & Create Cert Files
+				V1SecretList certSecretList = api.listSecretForAllNamespaces(null, null, null, "secret=cert", null, null, null, null, Boolean.FALSE);
+				int certSecretLatestResourceVersion = 0;
+				deleteBaseDirectory();
+				createBaseDirectory();
+				for(V1Secret secret : certSecretList.getItems()) {
+					int secretResourceVersion = Integer.parseInt(secret.getMetadata().getResourceVersion());
+					certSecretLatestResourceVersion = (certSecretLatestResourceVersion >= secretResourceVersion) ? certSecretLatestResourceVersion : secretResourceVersion;
+
+					List<String> domainList = new ArrayList<>();
+					Map<String, byte[]> secretMap = secret.getData();
+					String port = null;
+					
+					if(secretMap.get("REGISTRY_IP_PORT") != null) {
+						// 이전 버전 호환
+						domainList.add( new String(secretMap.get("REGISTRY_IP_PORT")) );
 					}
-					System.out.println("write filename: " + CERT_DIR + "/" + Constants.CERT_CERT_FILE);
-					try ( BufferedWriter writer = new BufferedWriter(new FileWriter(CERT_DIR + "/" + Constants.CERT_CERT_FILE)) ) {
-						writer.write(new String(secretMap.get(Constants.CERT_CERT_FILE)));
-					}
-					System.out.println("write filename: " + CERT_DIR + "/" + Constants.CERT_CRT_FILE);
-					try ( BufferedWriter writer = new BufferedWriter(new FileWriter(CERT_DIR + "/" + Constants.CERT_CRT_FILE)) ) {
-						writer.write(new String(secretMap.get(Constants.CERT_CRT_FILE)));
+					else {
+						if(secretMap.get("PORT") != null) {
+							port = new String(secretMap.get("PORT"));
+						}
+						if(secretMap.get("CLUSTER_IP") != null) {
+							domainList.add( new String(secretMap.get("CLUSTER_IP")) + ":" + port );
+						}
+						if(secretMap.get("LB_IP") != null) {
+							domainList.add( new String(secretMap.get("LB_IP")) + ":" + port );
+						}
+						if(secretMap.get("DOMAIN_NAME") != null) {
+							domainList.add( new String(secretMap.get("DOMAIN_NAME")) + ":" + port );
+						}
 					}
 					
+					
+					List<String> dirPathList = new ArrayList<>();
+					
+					for( String domain : domainList ) {
+						final String CERT_DIR = Constants.DOCKER_CERT_DIR + "/" + domain;
+
+						try {
+							createDirectory(CERT_DIR);
+							System.out.println("write filename: " + CERT_DIR + "/" + Constants.CERT_KEY_FILE);
+							try ( BufferedWriter writer = new BufferedWriter(new FileWriter(CERT_DIR + "/" + Constants.CERT_KEY_FILE)) ) {
+								writer.write(new String(secretMap.get(Constants.CERT_KEY_FILE)));
+							}
+							System.out.println("write filename: " + CERT_DIR + "/" + Constants.CERT_CERT_FILE);
+							try ( BufferedWriter writer = new BufferedWriter(new FileWriter(CERT_DIR + "/" + Constants.CERT_CERT_FILE)) ) {
+								writer.write(new String(secretMap.get(Constants.CERT_CERT_FILE)));
+							}
+							System.out.println("write filename: " + CERT_DIR + "/" + Constants.CERT_CRT_FILE);
+							try ( BufferedWriter writer = new BufferedWriter(new FileWriter(CERT_DIR + "/" + Constants.CERT_CRT_FILE)) ) {
+								writer.write(new String(secretMap.get(Constants.CERT_CRT_FILE)));
+							}
+						} catch (IOException e) {
+							e.printStackTrace();
+						}
+						
+						dirPathList.add(CERT_DIR);
+					}
+
 					// To delete a secret directory
-					gSecretMap.put(secret.getMetadata().getName(), ipPort);
-				} catch (IOException e) {
-					e.printStackTrace();
+					gSecretMap.put(secret.getMetadata().getName(), dirPathList);
 				}
+
+
+				// Watch Cert Secret
+				System.out.println("Cert Secret Watcher Run (Latest Resource Version: " + certSecretLatestResourceVersion + ")");
+				certSecretWatcher = new CertSecretWatcher(k8sClient, api, certSecretLatestResourceVersion);
+				certSecretWatcher.start();
+
+
+				// Check Watcher Threads are Alive every 10sec
+				while(true) {
+					if(!certSecretWatcher.isAlive()) {
+						certSecretLatestResourceVersion = CertSecretWatcher.getLatestResourceVersion();
+						System.out.println("Cert Secret Watcher is not Alive. Restart Cert Watcher! (Latest Resource Version: " + certSecretLatestResourceVersion + ")");
+						certSecretWatcher.interrupt();
+						certSecretWatcher = new CertSecretWatcher(k8sClient, api, certSecretLatestResourceVersion);
+						certSecretWatcher.start();
+					}
+
+					Thread.sleep(10000);
+				}
+			} catch (Exception e) {
+				System.out.println("Main Watcher Exception: " + e.getMessage());
+				StringWriter sw = new StringWriter();
+				e.printStackTrace(new PrintWriter(sw));
+				System.out.println(sw.toString());
+				
+				certSecretWatcher.interrupt();
+				System.exit(1);
 			}
 			
 			
-			// Watch Cert Secret
-			System.out.println("Cert Secret Watcher Run (Latest Resource Version: " + certSecretLatestResourceVersion + ")");
-			CertSecretWatcher certSecretWatcher = new CertSecretWatcher(k8sClient, api, certSecretLatestResourceVersion);
-			certSecretWatcher.start();
-
-			
-			// Check Watcher Threads are Alive every 10sec
-			while(true) {
-				if(!certSecretWatcher.isAlive()) {
-					certSecretLatestResourceVersion = CertSecretWatcher.getLatestResourceVersion();
-					System.out.println("Cert Secret Watcher is not Alive. Restart Cert Watcher! (Latest Resource Version: " + certSecretLatestResourceVersion + ")");
-					certSecretWatcher.interrupt();
-					certSecretWatcher = new CertSecretWatcher(k8sClient, api, certSecretLatestResourceVersion);
-					certSecretWatcher.start();
-				}
-
-				Thread.sleep(10000);
-			}
-		} catch (Exception e) {
-			System.out.println("Main Watcher Exception: " + e.getMessage());
-			StringWriter sw = new StringWriter();
-			e.printStackTrace(new PrintWriter(sw));
-			System.out.println(sw.toString());
 		}
 
 	}

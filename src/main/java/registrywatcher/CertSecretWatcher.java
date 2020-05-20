@@ -8,11 +8,11 @@ import java.io.StringWriter;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-
-import org.slf4j.Logger;
 
 import com.google.gson.reflect.TypeToken;
 
@@ -32,11 +32,16 @@ public class CertSecretWatcher extends Thread {
 	
 	CertSecretWatcher(ApiClient client, CoreV1Api api, int resourceVersion) throws Exception {
 		this.api = api;
-		this.watch = Watch.createWatch(
-				client, 
-				api.listSecretForAllNamespacesCall(null, null, null, "secret=cert", null, null, null, null, Boolean.TRUE, null),
-				new TypeToken<Watch.Response<V1Secret>>(){}.getType()
-				);
+		try {
+			this.watch = Watch.createWatch(
+					client, 
+					api.listSecretForAllNamespacesCall(null, null, null, "secret=cert", null, null, null, null, Boolean.TRUE, null),
+					new TypeToken<Watch.Response<V1Secret>>(){}.getType()
+					);
+		} catch(ApiException e) {
+			System.out.println("createWatch failed: " + e.getResponseBody());
+			System.exit(1);
+		}
 		this.executorService = Executors.newCachedThreadPool();
 		
 		latestResourceVersion = resourceVersion;
@@ -56,6 +61,7 @@ public class CertSecretWatcher extends Thread {
 					StringWriter sw = new StringWriter();
 					e.printStackTrace(new PrintWriter(sw));
 					System.out.println("[cert-secret-watcher] error: " + sw.toString());
+					System.exit(1);
 				}
 
 				V1Secret secret = response.object;
@@ -63,57 +69,80 @@ public class CertSecretWatcher extends Thread {
 					System.out.println(secret.toString());
 
 					if( Integer.parseInt(secret.getMetadata().getResourceVersion()) > latestResourceVersion ) {
-
 						latestResourceVersion = Integer.parseInt(secret.getMetadata().getResourceVersion());	
+						
+						List<String> domainList = new ArrayList<>();
+						Map<String, byte[]> secretMap = secret.getData();
+						String port = null;
+						
+						if(secretMap.get("REGISTRY_IP_PORT") != null) {
+							// 이전 버전 호환
+							domainList.add( new String(secretMap.get("REGISTRY_IP_PORT")) );
+						}
+						else {
+							if(secretMap.get("PORT") != null) {
+								port = new String(secretMap.get("PORT"));
+							}
+							if(secretMap.get("CLUSTER_IP") != null) {
+								domainList.add( new String(secretMap.get("CLUSTER_IP")) + ":" + port );
+							}
+							if(secretMap.get("LB_IP") != null) {
+								domainList.add( new String(secretMap.get("LB_IP")) + ":" + port );
+							}
+							if(secretMap.get("DOMAIN_NAME") != null) {
+								domainList.add( new String(secretMap.get("DOMAIN_NAME")) + ":" + port );
+							}
+						}
+						
+						String eventType = response.type.toString();
+						
+						switch(eventType) {
+						case Constants.EVENT_TYPE_ADDED :
+						case Constants.EVENT_TYPE_MODIFIED :
+							for( String domain : domainList ) {
+								final String CERT_DIR = Constants.DOCKER_CERT_DIR + "/" + domain;
 
-						boolean isDelete = false;
-
-						// Check if Secret Exists
-						try {
-							api.readNamespacedSecret(secret.getMetadata().getName(), secret.getMetadata().getNamespace(), null, null, null);
-						} catch (ApiException e) {
-							System.out.println(e.getResponseBody());
-							System.out.println("ApiException Code: " + e.getCode());
-							if( e.getCode() == 404 ) {
-								System.out.println("Delete Cert Directory");
-								isDelete = true;
 								try {
-									deleteDirectory(Constants.DOCKER_CERT_DIR + "/" + MainWatcher.gSecretMap.get(secret.getMetadata().getName()));
-								} catch (IOException e1) {
-									e1.printStackTrace();
+									createDirectory(CERT_DIR);
+									System.out.println("write filename: " + CERT_DIR + "/" + Constants.CERT_KEY_FILE);
+									try ( BufferedWriter writer = new BufferedWriter(new FileWriter(CERT_DIR + "/" + Constants.CERT_KEY_FILE)) ) {
+										writer.write(new String(secretMap.get(Constants.CERT_KEY_FILE)));
+									}
+									System.out.println("write filename: " + CERT_DIR + "/" + Constants.CERT_CERT_FILE);
+									try ( BufferedWriter writer = new BufferedWriter(new FileWriter(CERT_DIR + "/" + Constants.CERT_CERT_FILE)) ) {
+										writer.write(new String(secretMap.get(Constants.CERT_CERT_FILE)));
+									}
+									System.out.println("write filename: " + CERT_DIR + "/" + Constants.CERT_CRT_FILE);
+									try ( BufferedWriter writer = new BufferedWriter(new FileWriter(CERT_DIR + "/" + Constants.CERT_CRT_FILE)) ) {
+										writer.write(new String(secretMap.get(Constants.CERT_CRT_FILE)));
+									}
+
+								} catch (IOException e) {
+									e.printStackTrace();
 								}
 							}
-						}
 
-						if( !isDelete ) {
-							Map<String, byte[]> secretMap = secret.getData();
+							// To delete a secret directory
+							MainWatcher.gSecretMap.put(secret.getMetadata().getName(), domainList);
+							
+							break;
 
-							String ipPort = new String(secretMap.get("REGISTRY_IP_PORT"));
-							final String CERT_DIR = Constants.DOCKER_CERT_DIR + "/" + ipPort;
-
+						case Constants.EVENT_TYPE_DELETED :
+							System.out.println("Delete Cert Directory");
 							try {
-								createBaseDirectory();
-								createDirectory(CERT_DIR);
-								System.out.println("write filename: " + CERT_DIR + "/" + Constants.CERT_KEY_FILE);
-								try ( BufferedWriter writer = new BufferedWriter(new FileWriter(CERT_DIR + "/" + Constants.CERT_KEY_FILE)) ) {
-									writer.write(new String(secretMap.get(Constants.CERT_KEY_FILE)));
+								List<String> delDirList = new ArrayList<>();
+								delDirList = MainWatcher.gSecretMap.get(secret.getMetadata().getName());
+								
+								for( String domain: delDirList) {
+									deleteDirectory( Constants.DOCKER_CERT_DIR + "/" + domain );
 								}
-								System.out.println("write filename: " + CERT_DIR + "/" + Constants.CERT_CERT_FILE);
-								try ( BufferedWriter writer = new BufferedWriter(new FileWriter(CERT_DIR + "/" + Constants.CERT_CERT_FILE)) ) {
-									writer.write(new String(secretMap.get(Constants.CERT_CERT_FILE)));
-								}
-								System.out.println("write filename: " + CERT_DIR + "/" + Constants.CERT_CRT_FILE);
-								try ( BufferedWriter writer = new BufferedWriter(new FileWriter(CERT_DIR + "/" + Constants.CERT_CRT_FILE)) ) {
-									writer.write(new String(secretMap.get(Constants.CERT_CRT_FILE)));
-								}
-
-								MainWatcher.gSecretMap.put(secret.getMetadata().getName(), ipPort);
-							} catch (IOException e) {
-								e.printStackTrace();
+							} catch (IOException e1) {
+								e1.printStackTrace();
 							}
+							
+							break;
+							
 						}
-
-
 					}
 				}
 			});
@@ -123,6 +152,7 @@ public class CertSecretWatcher extends Thread {
 			System.out.println("[cert-secret-watcher] error from watching. \n" + sw.toString());			
 			
 			executorService.shutdown();
+			System.exit(1);
 		}
 	}
 	
@@ -157,7 +187,7 @@ public class CertSecretWatcher extends Thread {
 	}
 	
 	private static void deleteDirectory(String dirPath) throws IOException {
-		// Delete Image Directory
+		// Delete Directory
 		Path path = Paths.get(dirPath);
 		if (path != null && MainWatcher.deleteFile(path.toFile())) {
 			System.out.println("Directory deleted: " + dirPath);

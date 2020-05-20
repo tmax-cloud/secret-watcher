@@ -47,4 +47,9 @@ public class Constants {
 	 
 	// Secret Type
 	public static final String K8S_SECRET_TYPE_DOCKER_CONFIG_JSON = "kubernetes.io/dockerconfigjson";
+
+	// Event Type
+	public static final String EVENT_TYPE_ADDED = "ADDED";
+	public static final String EVENT_TYPE_MODIFIED = "MODIFIED";
+	public static final String EVENT_TYPE_DELETED = "DELETED";
 }
