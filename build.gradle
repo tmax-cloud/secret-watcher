@@ -22,21 +22,9 @@ dependencies {
     api 'org.apache.commons:commons-math3:3.6.1'
 
     // This dependency is used internally, and not exposed to consumers on their own compile classpath.
-    //compile 'com.google.guava:guava:27.0.1-jre'
 	compile 'io.kubernetes:client-java-api:7.0.0'
     compile 'io.kubernetes:client-java:7.0.0'
     compile 'io.kubernetes:client-java-proto:7.0.0'
-	//compile 'org.nanohttpd:nanohttpd:2.3.1'
-	//compile 'org.nanohttpd:nanohttpd-nanolets:2.3.1'
-	//compile 'com.auth0:java-jwt:3.9.0'
-	//compile 'com.fasterxml.jackson.core:jackson-databind:2.3.1'
-	//compile 'com.fasterxml.jackson.datatype:jackson-datatype-joda:2.3.1'
-	//compile 'org.apache.httpcomponents:httpclient:4.5.10'
-	//compile 'com.googlecode.json-simple:json-simple:1.1'
-	//compile 'com.squareup.okhttp:okhttp:2.7.5'
-	//compile 'ch.qos.logback:logback-classic:1.2.3'
-    //compile 'ch.qos.logback:logback-core:1.2.3'
-    //compile(group: "com.github.java-json-tools", name: "json-patch", version: "1.11");
 	
     // Use JUnit test framework
     testImplementation 'junit:junit:4.12'    
@@ -46,6 +34,7 @@ task doBuild {
 	dependsOn "makeJar"
 	dependsOn "copyDependencies"
 	dependsOn "copyStartShell"
+	dependsOn "copyDockerfile"
 }
 
 task makeJar(type: Jar) {
@@ -69,4 +58,9 @@ task copyDependencies(type: Copy) {
 task copyStartShell(type: Copy) {
 	into "build"
 	from "start.sh"
+}
+
+task copyDockerfile(type: Copy) {
+	into "build"
+	from "secret-watcher-image/Dockerfile"
 }
