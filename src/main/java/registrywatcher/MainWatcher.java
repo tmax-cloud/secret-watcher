@@ -133,14 +133,9 @@ public class MainWatcher {
 				StringWriter sw = new StringWriter();
 				e.printStackTrace(new PrintWriter(sw));
 				System.out.println(sw.toString());
-				
-				certSecretWatcher.interrupt();
 				System.exit(1);
 			}
-			
-			
 		}
-
 	}
 	
 	private static void deleteBaseDirectory() throws IOException {

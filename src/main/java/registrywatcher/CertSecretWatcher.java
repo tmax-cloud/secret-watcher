@@ -150,8 +150,6 @@ public class CertSecretWatcher extends Thread {
 			StringWriter sw = new StringWriter();
 			e.printStackTrace(new PrintWriter(sw));
 			System.out.println("[cert-secret-watcher] error from watching. \n" + sw.toString());			
-			
-			executorService.shutdown();
 			System.exit(1);
 		}
 	}
