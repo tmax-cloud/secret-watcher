@@ -62,5 +62,5 @@ task copyStartShell(type: Copy) {
 
 task copyDockerfile(type: Copy) {
 	into "build"
-	from "secret-watcher-image/Dockerfile"
+	from "secret-watcher-image"
 }
