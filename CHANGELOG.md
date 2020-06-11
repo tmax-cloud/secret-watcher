@@ -1,6 +1,23 @@
 # HyperCloudSecretWatcher changelog!!
 All notable changes to this project will be documented in this file.
 
+<!-------------------- v4.1.0.7 start -------------------->
+
+## HyperCloudSecretWatcher_4.1.0.7 (2020년 06월 11일 목 오후  1:31:08)
+
+### Added
+
+### Changed
+  - [mod] CertSecretWatcher NPE bug fix by sukhee_yun
+
+### Fixed
+
+### CRD yaml
+
+### Etc
+
+<!--------------------- v4.1.0.7 end --------------------->
+
 <!-------------------- v4.1.0.6 start -------------------->
 
 ## HyperCloudSecretWatcher_4.1.0.6 (2020년 06월  5일 금 오후  5:21:02)
