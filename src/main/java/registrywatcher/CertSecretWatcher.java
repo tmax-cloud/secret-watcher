@@ -27,7 +27,6 @@ public class CertSecretWatcher extends Thread {
 	private Watch<V1Secret> watch;
 	private ExecutorService executorService;
 
-	//	private static Logger logger = MainWatcher.logger;
 	private static int latestResourceVersion = 0;
 	private CoreV1Api api = null;
 	ApiClient client;
@@ -35,6 +34,7 @@ public class CertSecretWatcher extends Thread {
 	
 	CertSecretWatcher(ApiClient client, CoreV1Api api, int resourceVersion) throws Exception {
 		this.api = api;
+		this.client = client;
 		try {
 			this.watch = Watch.createWatch(
 					client, 
