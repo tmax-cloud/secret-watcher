@@ -1,6 +1,23 @@
 # HyperCloudSecretWatcher changelog!!
 All notable changes to this project will be documented in this file.
 
+<!-------------------- v4.1.0.8 start -------------------->
+
+## HyperCloudSecretWatcher_4.1.0.8 (2020년 06월 24일 수 오후  5:04:57)
+
+### Added
+
+### Changed
+  - [mod] log 파일 저장 (저장 위치: /home/tmax/secretwatcher/logs/operator.log) by sukhee_yun
+
+### Fixed
+
+### CRD yaml
+
+### Etc
+
+<!--------------------- v4.1.0.8 end --------------------->
+
 <!-------------------- v4.1.0.7 start -------------------->
 
 ## HyperCloudSecretWatcher_4.1.0.7 (2020년 06월 11일 목 오후  1:31:08)
