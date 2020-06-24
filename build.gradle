@@ -25,6 +25,8 @@ dependencies {
 	compile 'io.kubernetes:client-java-api:7.0.0'
     compile 'io.kubernetes:client-java:7.0.0'
     compile 'io.kubernetes:client-java-proto:7.0.0'
+	compile 'ch.qos.logback:logback-classic:1.2.3'
+    compile 'ch.qos.logback:logback-core:1.2.3'
 	
     // Use JUnit test framework
     testImplementation 'junit:junit:4.12'    
@@ -34,12 +36,13 @@ task doBuild {
 	dependsOn "makeJar"
 	dependsOn "copyDependencies"
 	dependsOn "copyStartShell"
+	dependsOn "copyK8sOperatorHome"
 	dependsOn "copyDockerfile"
 }
 
 task makeJar(type: Jar) {
     archiveName "hypercloud4-secret-watcher.jar"
-    destinationDir = file("build/secretwatcher")
+    destinationDir = file("build/secretwatcher/lib")
 
     from(sourceSets.main.output.classesDirs) {
         include("**")
@@ -51,13 +54,18 @@ task makeJar(type: Jar) {
 }
 
 task copyDependencies(type: Copy) {
-	into "build/secretwatcher"
+	into "build/secretwatcher/lib"
 	from configurations.compile
 }
 
 task copyStartShell(type: Copy) {
 	into "build"
 	from "start.sh"
+}
+
+task copyK8sOperatorHome(type: Copy) {
+	from '_operator'
+	into 'build/secretwatcher'
 }
 
 task copyDockerfile(type: Copy) {

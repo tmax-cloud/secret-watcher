@@ -14,6 +14,8 @@ import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+import org.slf4j.Logger;
+
 import com.google.gson.reflect.TypeToken;
 
 import io.kubernetes.client.openapi.ApiClient;
@@ -31,6 +33,7 @@ public class CertSecretWatcher extends Thread {
 	private CoreV1Api api = null;
 	ApiClient client;
 	StateCheckInfo sci = new StateCheckInfo();
+	private static Logger logger = MainWatcher.logger;
 	
 	CertSecretWatcher(ApiClient client, CoreV1Api api, int resourceVersion) throws Exception {
 		this.api = api;
@@ -42,7 +45,7 @@ public class CertSecretWatcher extends Thread {
 					new TypeToken<Watch.Response<V1Secret>>(){}.getType()
 					);
 		} catch(ApiException e) {
-			System.out.println("createWatch failed: " + e.getResponseBody());
+			logger.info("createWatch failed: " + e.getResponseBody());
 			System.exit(1);
 		}
 		this.executorService = Executors.newCachedThreadPool();
@@ -55,23 +58,23 @@ public class CertSecretWatcher extends Thread {
 		try {
 			while(true) {
 				sci.checkThreadState();
-				System.out.println("[cert-secret-watcher] run()");
+				logger.info("[cert-secret-watcher] run()");
 				watch.forEach(response -> {
 					try {
 						if(Thread.interrupted()) {
-							System.out.println("[cert-secret-watcher] Interrupted!");
+							logger.info("[cert-secret-watcher] Interrupted!");
 							this.watch.close(); executorService.shutdown();
 						}
 					} catch(Exception e) {
 						StringWriter sw = new StringWriter();
 						e.printStackTrace(new PrintWriter(sw));
-						System.out.println("[cert-secret-watcher] error: " + sw.toString());
+						logger.info("[cert-secret-watcher] error: " + sw.toString());
 						System.exit(1);
 					}
 
 					V1Secret secret = response.object;
 					if( secret != null ) {
-						System.out.println(secret.toString());
+						logger.info(secret.toString());
 
 						if( Integer.parseInt(secret.getMetadata().getResourceVersion()) > latestResourceVersion ) {
 							latestResourceVersion = Integer.parseInt(secret.getMetadata().getResourceVersion());	
@@ -109,15 +112,15 @@ public class CertSecretWatcher extends Thread {
 
 									try {
 										createDirectory(CERT_DIR);
-										System.out.println("write filename: " + CERT_DIR + "/" + Constants.CERT_KEY_FILE);
+										logger.info("write filename: " + CERT_DIR + "/" + Constants.CERT_KEY_FILE);
 										try ( BufferedWriter writer = new BufferedWriter(new FileWriter(CERT_DIR + "/" + Constants.CERT_KEY_FILE)) ) {
 											writer.write(new String(secretMap.get(Constants.CERT_KEY_FILE)));
 										}
-										System.out.println("write filename: " + CERT_DIR + "/" + Constants.CERT_CERT_FILE);
+										logger.info("write filename: " + CERT_DIR + "/" + Constants.CERT_CERT_FILE);
 										try ( BufferedWriter writer = new BufferedWriter(new FileWriter(CERT_DIR + "/" + Constants.CERT_CERT_FILE)) ) {
 											writer.write(new String(secretMap.get(Constants.CERT_CERT_FILE)));
 										}
-										System.out.println("write filename: " + CERT_DIR + "/" + Constants.CERT_CRT_FILE);
+										logger.info("write filename: " + CERT_DIR + "/" + Constants.CERT_CRT_FILE);
 										try ( BufferedWriter writer = new BufferedWriter(new FileWriter(CERT_DIR + "/" + Constants.CERT_CRT_FILE)) ) {
 											writer.write(new String(secretMap.get(Constants.CERT_CRT_FILE)));
 										}
@@ -133,7 +136,7 @@ public class CertSecretWatcher extends Thread {
 								break;
 
 							case Constants.EVENT_TYPE_DELETED :
-								System.out.println("Delete Cert Directory");
+								logger.info("Delete Cert Directory");
 								try {
 									List<String> delDirList = new ArrayList<>();
 									delDirList = MainWatcher.gSecretMap.get(secret.getMetadata().getName());
@@ -151,7 +154,7 @@ public class CertSecretWatcher extends Thread {
 						}
 					}
 				});
-				System.out.println("=============== Cert Secret 'For Each' END ===============");
+				logger.info("=============== Cert Secret 'For Each' END ===============");
 				watch = Watch.createWatch(
 						client, 
 						api.listSecretForAllNamespacesCall(null, null, null, "secret=cert", null, null, null, null, Boolean.TRUE, null),
@@ -161,9 +164,9 @@ public class CertSecretWatcher extends Thread {
 		} catch(Exception e) {
 			StringWriter sw = new StringWriter();
 			e.printStackTrace(new PrintWriter(sw));
-			System.out.println("[cert-secret-watcher] error from watching. \n" + sw.toString());			
+			logger.info("[cert-secret-watcher] error from watching. \n" + sw.toString());			
 			if( e.getMessage().equals("abnormal") ) {
-				System.out.println("Catch abnormal conditions!! Exit process");
+				logger.info("Catch abnormal conditions!! Exit process");
 			}
 			System.exit(1);
 		}
@@ -177,13 +180,13 @@ public class CertSecretWatcher extends Thread {
 		Path dockerHome = Paths.get(Constants.DOCKER_DIR);
 		if (!Files.exists(dockerHome)) {
 			Files.createDirectory(dockerHome);
-			System.out.println("Directory created: " + Constants.DOCKER_DIR);
+			logger.info("Directory created: " + Constants.DOCKER_DIR);
 		}
 
 		Path dockerCertDir = Paths.get(Constants.DOCKER_CERT_DIR);
 		if (!Files.exists(dockerCertDir)) {
 			Files.createDirectory(dockerCertDir);
-			System.out.println("Directory created: " + Constants.DOCKER_CERT_DIR);
+			logger.info("Directory created: " + Constants.DOCKER_CERT_DIR);
 		}
 
 		return dockerCertDir.toString();
@@ -193,7 +196,7 @@ public class CertSecretWatcher extends Thread {
 		Path dir = Paths.get(dirPath);
 		if (!Files.exists(dir)) {
 			Files.createDirectory(dir);
-			System.out.println("Directory created: " + dirPath);
+			logger.info("Directory created: " + dirPath);
 		}
 
 		return dirPath;
@@ -203,9 +206,9 @@ public class CertSecretWatcher extends Thread {
 		// Delete Directory
 		Path path = Paths.get(dirPath);
 		if (path != null && MainWatcher.deleteFile(path.toFile())) {
-			System.out.println("Directory deleted: " + dirPath);
+			logger.info("Directory deleted: " + dirPath);
 		} else {
-			System.out.println("Directory doesn't exist: " + dirPath);
+			logger.info("Directory doesn't exist: " + dirPath);
 		}
 	}
 }

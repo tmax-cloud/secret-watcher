@@ -14,6 +14,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import io.kubernetes.client.openapi.ApiClient;
 import io.kubernetes.client.openapi.Configuration;
 import io.kubernetes.client.openapi.apis.CoreV1Api;
@@ -30,12 +33,15 @@ public class MainWatcher {
 	
 	private static ApiClient k8sClient;
 	private static CoreV1Api api;
+	public static Logger logger = LoggerFactory.getLogger("K8SOperator");
 	
 	public static void main(String[] args) {
 		while(true) {
 			CertSecretWatcher certSecretWatcher = null;
 			
+			logger.info("Secret Main Watcher Start");
 			System.out.println("Secret Main Watcher Start");
+			System.out.println("The log file exists in /home/tmax/secretwatcher/logs/operator.log");
 			
 			try { 
 				k8sClient = Config.fromCluster();
@@ -86,15 +92,15 @@ public class MainWatcher {
 
 						try {
 							createDirectory(CERT_DIR);
-							System.out.println("write filename: " + CERT_DIR + "/" + Constants.CERT_KEY_FILE);
+							logger.info("write filename: " + CERT_DIR + "/" + Constants.CERT_KEY_FILE);
 							try ( BufferedWriter writer = new BufferedWriter(new FileWriter(CERT_DIR + "/" + Constants.CERT_KEY_FILE)) ) {
 								writer.write(new String(secretMap.get(Constants.CERT_KEY_FILE)));
 							}
-							System.out.println("write filename: " + CERT_DIR + "/" + Constants.CERT_CERT_FILE);
+							logger.info("write filename: " + CERT_DIR + "/" + Constants.CERT_CERT_FILE);
 							try ( BufferedWriter writer = new BufferedWriter(new FileWriter(CERT_DIR + "/" + Constants.CERT_CERT_FILE)) ) {
 								writer.write(new String(secretMap.get(Constants.CERT_CERT_FILE)));
 							}
-							System.out.println("write filename: " + CERT_DIR + "/" + Constants.CERT_CRT_FILE);
+							logger.info("write filename: " + CERT_DIR + "/" + Constants.CERT_CRT_FILE);
 							try ( BufferedWriter writer = new BufferedWriter(new FileWriter(CERT_DIR + "/" + Constants.CERT_CRT_FILE)) ) {
 								writer.write(new String(secretMap.get(Constants.CERT_CRT_FILE)));
 							}
@@ -111,7 +117,7 @@ public class MainWatcher {
 
 
 				// Watch Cert Secret
-				System.out.println("Cert Secret Watcher Run (Latest Resource Version: " + certSecretLatestResourceVersion + ")");
+				logger.info("Cert Secret Watcher Run (Latest Resource Version: " + certSecretLatestResourceVersion + ")");
 				certSecretWatcher = new CertSecretWatcher(k8sClient, api, certSecretLatestResourceVersion);
 				certSecretWatcher.start();
 
@@ -120,7 +126,7 @@ public class MainWatcher {
 				while(true) {
 					if(!certSecretWatcher.isAlive()) {
 						certSecretLatestResourceVersion = CertSecretWatcher.getLatestResourceVersion();
-						System.out.println("Cert Secret Watcher is not Alive. Restart Cert Watcher! (Latest Resource Version: " + certSecretLatestResourceVersion + ")");
+						logger.info("Cert Secret Watcher is not Alive. Restart Cert Watcher! (Latest Resource Version: " + certSecretLatestResourceVersion + ")");
 						certSecretWatcher.interrupt();
 						certSecretWatcher = new CertSecretWatcher(k8sClient, api, certSecretLatestResourceVersion);
 						certSecretWatcher.start();
@@ -129,10 +135,10 @@ public class MainWatcher {
 					Thread.sleep(10000);
 				}
 			} catch (Exception e) {
-				System.out.println("Main Watcher Exception: " + e.getMessage());
+				logger.info("Main Watcher Exception: " + e.getMessage());
 				StringWriter sw = new StringWriter();
 				e.printStackTrace(new PrintWriter(sw));
-				System.out.println(sw.toString());
+				logger.info(sw.toString());
 				System.exit(1);
 			}
 		}
@@ -142,9 +148,9 @@ public class MainWatcher {
 		// Delete Image Directory
 		Path path = Paths.get(Constants.DOCKER_CERT_DIR);
 		if (path != null && deleteFile(path.toFile())) {
-			System.out.println("Directory deleted: " + Constants.DOCKER_CERT_DIR);
+			logger.info("Directory deleted: " + Constants.DOCKER_CERT_DIR);
 		} else {
-			System.out.println("Directory doesn't exist: " + Constants.DOCKER_CERT_DIR);
+			logger.info("Directory doesn't exist: " + Constants.DOCKER_CERT_DIR);
 		}
 	}
 	
@@ -152,13 +158,13 @@ public class MainWatcher {
 		Path dockerHome = Paths.get(Constants.DOCKER_DIR);
 		if (!Files.exists(dockerHome)) {
 			Files.createDirectory(dockerHome);
-			System.out.println("Directory created: " + Constants.DOCKER_DIR);
+			logger.info("Directory created: " + Constants.DOCKER_DIR);
 		}
 		
 		Path dockerCertDir = Paths.get(Constants.DOCKER_CERT_DIR);
 		if (!Files.exists(dockerCertDir)) {
 			Files.createDirectory(dockerCertDir);
-			System.out.println("Directory created: " + Constants.DOCKER_CERT_DIR);
+			logger.info("Directory created: " + Constants.DOCKER_CERT_DIR);
 		}
 		
 		return dockerCertDir.toString();
@@ -168,7 +174,7 @@ public class MainWatcher {
 		Path dir = Paths.get(dirPath);
 		if (!Files.exists(dir)) {
 			Files.createDirectory(dir);
-			System.out.println("Directory created: " + dirPath);
+			logger.info("Directory created: " + dirPath);
 		}
 		
 		return dirPath;
