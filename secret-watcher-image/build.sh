@@ -1,8 +1,8 @@
 #!/bin/bash
 
-REGISTRY=192.168.6.110:5000
+REGISTRY=tmaxcloudck
 IMAGE=hypercloud4-secret-watcher
-VERSION=b4.1.0.5
+VERSION=b4.1.0.10
 
 docker build -t ${REGISTRY}/${IMAGE}:${VERSION} .
 docker tag ${REGISTRY}/${IMAGE}:${VERSION} ${REGISTRY}/${IMAGE}:latest
