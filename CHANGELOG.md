@@ -1,6 +1,24 @@
 # HyperCloudSecretWatcher changelog!!
 All notable changes to this project will be documented in this file.
 
+<!-------------------- v4.1.0.10 start -------------------->
+
+## HyperCloudSecretWatcher_4.1.0.10 (2020년 09월 23일 수 오후  4:47:01)
+
+### Added
+
+### Changed
+  - [mod] log timestamp 시간을 한국 시간기준으로 출력하도록 수정 by sukhee_yun
+  - [mod] 상세 log 추가, secret 삭제시 삭제할 directory 목록을 잘못 저장한 버그 수정 by sukhee_yun
+
+### Fixed
+
+### CRD yaml
+
+### Etc
+
+<!--------------------- v4.1.0.10 end --------------------->
+
 <!-------------------- v4.1.0.9 start -------------------->
 
 ## HyperCloudSecretWatcher_4.1.0.9 (2020년 07월 17일 금 오후  1:29:31)
