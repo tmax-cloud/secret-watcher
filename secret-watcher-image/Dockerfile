@@ -1,11 +1,11 @@
-FROM alpine:3
+FROM openjdk:8-jre-alpine3.9
 
-LABEL maintainer="seonho_choi@tmax.co.kr"
+LABEL maintainer="sukhee_yun@tmax.co.kr"
 
 ADD ./secretwatcher /home/tmax/secretwatcher
 ADD ./start.sh /home/tmax/
 RUN apk update ; \
-	apk add openjdk8-jre ; \
+	apk add tzdata ; \
 	chmod 775 -R /home/tmax/secretwatcher ; \
 	chmod 775 /home/tmax/start.sh ; \
 	sed -i 's/\r$//' /home/tmax/start.sh
