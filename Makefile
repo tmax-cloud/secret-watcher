@@ -1,6 +1,7 @@
-SHELL := /bin/bash
+SHELL:=/bin/bash
+BASEPATH=$(CURDIR)
 BUILDPATH=$(BASEPATH)/build
-MAKEPATH=$(BUILDPATH)/make
+MAKEPATH=$(BASEPATH)/make
 
 # gradle parameters
 GRADLECMD=$(shell which gradle)
