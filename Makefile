@@ -1,6 +1,7 @@
-SHELL := /bin/bash
-BUILDPATH=$(CURDIR)
-MAKEPATH=$(BUILDPATH)/make
+SHELL:=/bin/bash
+BASEPATH=$(CURDIR)
+BUILDPATH=$(BASEPATH)/build
+MAKEPATH=$(BASEPATH)/make
 
 # gradle parameters
 GRADLECMD=$(shell which gradle)
@@ -22,14 +23,16 @@ VERSIONTAG=b4.1.0.10a
 # pull/push image
 PUSHSCRIPTPATH=$(MAKEPATH)
 PUSHSCRIPTNAME=pushimage.sh
-REGISTRYUSER=
-REGISTRYPASSWORD=
+REGISTRYUSER=tmaxcloudck
+REGISTRYPASSWORD=tmax@cloud
 
 .PHONY: build
 build:
 	@echo "build docker image"
 	@$(GRADLECMD) build
-	@$(DOCKERBUILD) -f $(MAKEPATH)/Dockerfile -t $(REGISTRY)/$(DOCKER_IMAGE_NAME):$(VERSIONTAG)
+	mkdir -p $(MAKEPATH)/bin
+	cp $(BUILDPATH)/libs/* $(MAKEPATH)/bin
+	@$(DOCKERBUILD) -t $(DOCKER_IMAGE_NAME):$(VERSIONTAG) ./make
 
 .PHONY: push-image
 push-image:
