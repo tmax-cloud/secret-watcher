@@ -27,24 +27,18 @@ import io.kubernetes.client.openapi.models.V1SecretList;
 import io.kubernetes.client.util.Config;
 
 public class MainWatcher {
-
-    //	public static Logger logger = LoggerFactory.getLogger("RegWatcher");
+    final static Logger logger = LoggerFactory.getLogger(MainWatcher.class);
 
     // gSecretMap: To also delete the certificate directory when the registry is cleared
     public static Map<String, List<String>> gSecretMap = new HashMap<>();    // <registryName, ipPort>
 
     private static ApiClient k8sClient;
     private static CoreV1Api api;
-    public static Logger logger = LoggerFactory.getLogger("K8SOperator");
 
     public static void main(String[] args) {
+        CertSecretWatcher certSecretWatcher = null;
+        logger.info("Secret Main Watcher Start");
         while (true) {
-            CertSecretWatcher certSecretWatcher = null;
-
-            logger.info("Secret Main Watcher Start");
-            System.out.println("Secret Main Watcher Start");
-            System.out.println("The log file exists in /home/tmax/secretwatcher/logs/operator.log");
-
             try {
                 k8sClient = Config.fromCluster();
                 k8sClient.setConnectTimeout(0);
@@ -57,7 +51,9 @@ public class MainWatcher {
                 // Get Latest Resource Version & Create Cert Files
                 V1SecretList certSecretList = null;
                 try {
-                    certSecretList = api.listSecretForAllNamespaces(null, null, null, "secret=cert", null, null, null, null, Boolean.FALSE);
+                    certSecretList = api.listSecretForAllNamespaces(null, null,
+                            null, "secret=cert", null, null, null,
+                            null, null, Boolean.FALSE);
                 } catch (ApiException e) {
                     logger.info("call listSecretForAllNamespaces failed: " + e.getResponseBody());
                     throw e;

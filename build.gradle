@@ -12,25 +12,23 @@ plugins {
 }
 
 repositories {
-    // Use jcenter for resolving your dependencies.
-    // You can declare any Maven/Ivy/file repository here.
-    jcenter()
+    mavenCentral()
+}
+
+java {
+    sourceCompatibility(JavaVersion.VERSION_1_8)
+    targetCompatibility(JavaVersion.VERSION_1_8)
 }
 
 dependencies {
-    // This dependency is exported to consumers, that is to say found on their compile classpath.
-    // api 'org.apache.commons:commons-math3:3.6.1'
-
-    // This dependency is used internally, and not exposed to consumers on their own compile classpath.
     // https://mvnrepository.com/artifact/io.kubernetes/client-java-api
-    implementation 'io.kubernetes:client-java-api:7.0.0'
-    implementation 'io.kubernetes:client-java:7.0.0'
-    implementation 'io.kubernetes:client-java-proto:7.0.0'
-    implementation 'ch.qos.logback:logback-classic:1.2.3'
-    implementation 'ch.qos.logback:logback-core:1.2.3'
+    implementation 'io.kubernetes:client-java-api:13.0.1'
+    implementation 'io.kubernetes:client-java:13.0.1'
+    implementation 'io.kubernetes:client-java-proto:13.0.1'
+    implementation 'ch.qos.logback:logback-classic:1.2.6'
+    implementation 'ch.qos.logback:logback-core:1.2.6'
 
-    // Use JUnit test framework
-    testImplementation 'junit:junit:4.12'
+    testImplementation 'junit:junit:4.13.2'
 }
 
 jar {

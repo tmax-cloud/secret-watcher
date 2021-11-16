@@ -1,7 +1,6 @@
-SHELL:=/bin/bash
-BASEPATH=$(CURDIR)
+SHELL := /bin/bash
 BUILDPATH=$(BASEPATH)/build
-MAKEPATH=$(BASEPATH)/make
+MAKEPATH=$(BUILDPATH)/make
 
 # gradle parameters
 GRADLECMD=$(shell which gradle)
@@ -23,8 +22,8 @@ VERSIONTAG=b4.1.0.10a
 # pull/push image
 PUSHSCRIPTPATH=$(MAKEPATH)
 PUSHSCRIPTNAME=pushimage.sh
-REGISTRYUSER=tmaxcloudck
-REGISTRYPASSWORD=tmax@cloud
+REGISTRYUSER=
+REGISTRYPASSWORD=
 
 .PHONY: build
 build:

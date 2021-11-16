@@ -4,14 +4,17 @@ import java.sql.Timestamp;
 
 import org.slf4j.Logger;
 
+import org.slf4j.LoggerFactory;
+import registrywatcher.CertSecretWatcher;
 import registrywatcher.MainWatcher;
 
 public class StateCheckInfo {
+    final static Logger logger = LoggerFactory.getLogger(StateCheckInfo.class);
+
     int tryCount;
     Timestamp baseTime;
     static final int CHECK_TRY_COUNT = 20;
     static final long THRESHHOLD_TIME = 100; // milliseconds
-    private static Logger logger = MainWatcher.logger;
 
     public StateCheckInfo() {
         super();
