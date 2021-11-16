@@ -54,6 +54,7 @@ public class CertSecretWatcher extends Thread {
 
 	@Override
 	public void run() {
+
 		try {
 			while(true) {
 				sci.checkThreadState();
@@ -72,7 +73,6 @@ public class CertSecretWatcher extends Thread {
 					}
 
 					try {
-
 						V1Secret secret = response.object;
 						if( secret != null ) {
 							logger.info(secret.toString());
@@ -85,7 +85,6 @@ public class CertSecretWatcher extends Thread {
 								String port = null;
 
 								if(secretMap.get("REGISTRY_IP_PORT") != null) {
-									// 이전 버전 호환
 									domainList.add( new String(secretMap.get("REGISTRY_IP_PORT")) );
 								}
 								else {

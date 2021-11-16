@@ -21,20 +21,20 @@ spec:
         env:
         - name: TZ
           value: Asia/Seoul
-        resources:
-          limits:
-            cpu: "50m"
-            memory: "100Mi"
-          requests:
-            cpu: "50m"
-            memory: "100Mi"
+#        resources:
+#          limits:
+#            cpu: "50m"
+#            memory: "100Mi"
+#          requests:
+#            cpu: "50m"
+#            memory: "100Mi"
         volumeMounts:
         - name: cert-dir
           mountPath: /etc/docker/certs.d
         - name: docker-dir
           mountPath: /root/.docker
       terminationGracePeriodSeconds: 30
-      serviceAccountName: hypercloud4-admin
+#      serviceAccountName: hypercloud4-admin
       volumes:
       - name: cert-dir
         hostPath:
