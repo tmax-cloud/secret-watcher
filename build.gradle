@@ -34,6 +34,9 @@ dependencies {
 jar {
     archiveName "hypercloud4-secret-watcher.jar"
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    exclude("META-INF/*.SF")
+    exclude("META-INF/*.DSA")
+    exclude("META-INF/*.RSA")
 
     from {
         configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
@@ -42,8 +45,4 @@ jar {
     manifest {
         attributes 'Main-Class': 'registrywatcher.MainWatcher'
     }
-
-    exclude("META-INF/*.SF")
-    exclude("META-INF/*.DSA")
-    exclude("META-INF/*.RSA")
 }

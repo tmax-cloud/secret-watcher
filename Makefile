@@ -15,6 +15,7 @@ DOCKERIMAGES=$(DOCKERCMD) images
 DOCKERSAVE=$(DOCKERCMD) save
 DOCKERCOMPOSECMD=$(shell which docker-compose)
 DOCKERTAG=$(DOCKERCMD) tag
+DOCKERRUN=$(DOCKERCMD) run
 
 REGISTRYSERVER=
 DOCKER_IMAGE_NAME=tmaxcloudck/hypercloud4-secret-watcher
@@ -41,3 +42,11 @@ push-image:
 	@$(PUSHSCRIPTPATH)/$(PUSHSCRIPTNAME) $(REGISTRYSERVER)$(DOCKER_IMAGE_NAME):$(VERSIONTAG) \
 		$(REGISTRYUSER) $(REGISTRYPASSWORD) $(REGISTRYSERVER)
 	@$(DOCKERRMIMAGE) $(REGISTRYSERVER)$(DOCKER_IMAGE_NAME):$(VERSIONTAG)
+
+.PHONY: run
+run:
+	@$(DOCKERRUN) --name secretwatcher -it --rm  -v /etc/docker/certs.d:/etc/docker/certs.d -v "${HOME}/.kube/":/kube -e KUBECONFIG=/kube/config $(DOCKER_IMAGE_NAME):$(VERSIONTAG)
+
+.PHONY: smoke
+smoke: build run
+
