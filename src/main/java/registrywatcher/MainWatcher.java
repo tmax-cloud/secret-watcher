@@ -1,224 +1,189 @@
 package registrywatcher;
 
-import java.io.BufferedWriter;
-import java.io.File;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.io.PrintWriter;
-import java.io.StringWriter;
+import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+import java.util.concurrent.TimeUnit;
 
+import io.kubernetes.client.informer.ResourceEventHandler;
+import io.kubernetes.client.informer.SharedIndexInformer;
+import io.kubernetes.client.informer.SharedInformerFactory;
+import io.kubernetes.client.util.*;
+import okhttp3.OkHttpClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.kubernetes.client.openapi.ApiClient;
-import io.kubernetes.client.openapi.ApiException;
 import io.kubernetes.client.openapi.Configuration;
 import io.kubernetes.client.openapi.apis.CoreV1Api;
 import io.kubernetes.client.openapi.models.V1Secret;
 import io.kubernetes.client.openapi.models.V1SecretList;
-import io.kubernetes.client.util.Config;
 
 public class MainWatcher {
     final static Logger logger = LoggerFactory.getLogger(MainWatcher.class);
 
-    // gSecretMap: To also delete the certificate directory when the registry is cleared
-    public static Map<String, List<String>> gSecretMap = new HashMap<>();    // <registryName, ipPort>
+    final static String DOCKER_CONF_BASE = "/etc/docker";
+    final static String DOCKER_CERT_BASE = "/etc/docker/certs.d";
 
-    private static ApiClient k8sClient;
-    private static CoreV1Api api;
+    final static String CERT_KEY_FILENAME = "localhub.key";
+    final static String CERT_CRT_FILENAME = "localhub.crt";
+    final static String CERT_CERT_FILENAME = "localhub.cert";
 
-    public static void main(String[] args) {
-        CertSecretWatcher certSecretWatcher = null;
-        logger.info("Secret Main Watcher Start");
-        while (true) {
-            try {
-                k8sClient = Config.fromCluster();
-                k8sClient.setConnectTimeout(0);
-                k8sClient.setReadTimeout(0);
-                k8sClient.setWriteTimeout(0);
-                Configuration.setDefaultApiClient(k8sClient);
+    public static void main(String[] args) throws Exception {
+        logger.info("Initialize docker cert directory...");
+        createDockerBaseCertDirectory();
 
-                api = new CoreV1Api();
+        logger.info("Initialize k8s client");
+        ApiClient apiClient = Config.defaultClient();
+        OkHttpClient httpClient = apiClient.getHttpClient().newBuilder().readTimeout(0, TimeUnit.SECONDS).build();
+        apiClient.setHttpClient(httpClient);
 
-                // Get Latest Resource Version & Create Cert Files
-                V1SecretList certSecretList = null;
-                try {
-                    certSecretList = api.listSecretForAllNamespaces(null, null,
-                            null, "secret=cert", null, null, null,
-                            null, null, Boolean.FALSE);
-                } catch (ApiException e) {
-                    logger.info("call listSecretForAllNamespaces failed: " + e.getResponseBody());
-                    throw e;
-                }
+        Configuration.setDefaultApiClient(apiClient);
+        CoreV1Api coreV1Api = new CoreV1Api();
 
-                int certSecretLatestResourceVersion = 0;
-                deleteBaseDirectory();
-                createBaseDirectory();
+        logger.info("Initialize V1Core Secret informer");
+        SharedInformerFactory factory = new SharedInformerFactory();
+        SharedIndexInformer<V1Secret> secretInformer =
+                factory.sharedIndexInformerFor(
+                        (CallGeneratorParams params) -> {
+                            return coreV1Api.listSecretForAllNamespacesCall(
+                                    null,
+                                    null,
+                                    null,
+                                    "secret=cert",
+                                    null,
+                                    null,
+                                    params.resourceVersion,
+                                    null,
+                                    params.timeoutSeconds,
+                                    params.watch,
+                                    null);
+                        },
+                        V1Secret.class,
+                        V1SecretList.class);
 
-                for (V1Secret secret : certSecretList.getItems()) {
-                    int secretResourceVersion = Integer.parseInt(secret.getMetadata().getResourceVersion());
-                    certSecretLatestResourceVersion = (certSecretLatestResourceVersion >= secretResourceVersion) ? certSecretLatestResourceVersion : secretResourceVersion;
-
-                    List<String> domainList = new ArrayList<>();
-                    Map<String, byte[]> secretMap = secret.getData();
-                    String port = null;
-
-                    if (secretMap.get("REGISTRY_IP_PORT") != null) {
-                        domainList.add(new String(secretMap.get("REGISTRY_IP_PORT")));
-                    } else {
-                        if (secretMap.get("PORT") != null) {
-                            port = new String(secretMap.get("PORT"));
-                        }
-                        if (secretMap.get("CLUSTER_IP") != null) {
-                            domainList.add(new String(secretMap.get("CLUSTER_IP")) + ":" + port);
-                        }
-                        if (secretMap.get("LB_IP") != null) {
-                            domainList.add(new String(secretMap.get("LB_IP")) + ":" + port);
-                        }
-                        if (secretMap.get("DOMAIN_NAME") != null) {
-                            domainList.add(new String(secretMap.get("DOMAIN_NAME")) + ":" + port);
-                        }
-                    }
-
-                    for (String domain : domainList) {
-                        final String CERT_DIR = Constants.DOCKER_CERT_DIR + "/" + domain;
-
+        secretInformer.addEventHandler(
+                new ResourceEventHandler<V1Secret>() {
+                    @Override
+                    public void onAdd(V1Secret secret) {
+                        List<String> hosts = getHostsFrom(secret);
+                        Map<String, byte[]> certs = getCertsFrom(secret);
                         try {
-                            createDirectory(CERT_DIR);
-                            logger.info("write filename: " + CERT_DIR + "/" + Constants.CERT_KEY_FILE);
-                            try (BufferedWriter writer = new BufferedWriter(new FileWriter(CERT_DIR + "/" + Constants.CERT_KEY_FILE))) {
-                                writer.write(new String(secretMap.get(Constants.CERT_KEY_FILE)));
-                            }
-                            logger.info("write filename: " + CERT_DIR + "/" + Constants.CERT_CERT_FILE);
-                            try (BufferedWriter writer = new BufferedWriter(new FileWriter(CERT_DIR + "/" + Constants.CERT_CERT_FILE))) {
-                                writer.write(new String(secretMap.get(Constants.CERT_CERT_FILE)));
-                            }
-                            logger.info("write filename: " + CERT_DIR + "/" + Constants.CERT_CRT_FILE);
-                            try (BufferedWriter writer = new BufferedWriter(new FileWriter(CERT_DIR + "/" + Constants.CERT_CRT_FILE))) {
-                                writer.write(new String(secretMap.get(Constants.CERT_CRT_FILE)));
-                            }
+                            removeDockerCert(hosts);
+                            createDockerCert(hosts, certs);
                         } catch (IOException e) {
-                            StringWriter sw = new StringWriter();
-                            e.printStackTrace(new PrintWriter(sw));
-                            logger.info(sw.toString());
-                            throw e;
+                            logger.error("Failed to create docker cert");
+                            e.printStackTrace();
                         }
+
+                        logger.info(String.format("added cert for registry:%s", hosts));
                     }
 
-                    // To delete a secret directory
-                    gSecretMap.put(secret.getMetadata().getName(), domainList);
-                    logger.info("cert.d directory list after create");
-
-                    for (String key : MainWatcher.gSecretMap.keySet()) {
-                        List<String> list = MainWatcher.gSecretMap.get(key);
-
-                        logger.info("\t" + key + "=" + Arrays.toString(list.toArray()));
-                    }
-                }
-
-                // Watch Cert Secret
-                logger.info("Cert Secret Watcher Run (Latest Resource Version: " + certSecretLatestResourceVersion + ")");
-                certSecretWatcher = new CertSecretWatcher(k8sClient, api, certSecretLatestResourceVersion);
-                certSecretWatcher.start();
-
-                // Check Watcher Threads are Alive every 10sec
-                while (true) {
-                    if (!certSecretWatcher.isAlive()) {
-                        certSecretLatestResourceVersion = CertSecretWatcher.getLatestResourceVersion();
-                        logger.info("Cert Secret Watcher is not Alive. Restart Cert Watcher! (Latest Resource Version: " + certSecretLatestResourceVersion + ")");
-                        certSecretWatcher.interrupt();
-                        certSecretWatcher = new CertSecretWatcher(k8sClient, api, certSecretLatestResourceVersion);
-                        certSecretWatcher.start();
+                    @Override
+                    public void onUpdate(V1Secret oldSecret, V1Secret newSecret) {
+                        logger.info(String.format(
+                                "%s => %s secret updated!\n",
+                                oldSecret.getMetadata().getName(), newSecret.getMetadata().getName()));
                     }
 
-                    Thread.sleep(10000);
-                }
-            } catch (Exception e) {
-                logger.info("Main Watcher Exception: " + e.getMessage());
-                StringWriter sw = new StringWriter();
-                e.printStackTrace(new PrintWriter(sw));
-                logger.info(sw.toString());
-                System.exit(1);
-            }
-        }
+                    @Override
+                    public void onDelete(V1Secret secret, boolean deletedFinalStateUnknown) {
+                        List<String> hosts = getHostsFrom(secret);
+                        try {
+                            removeDockerCert(hosts);
+                        } catch (IOException e) {
+                            logger.error("Failed to remove docker cert");
+                            e.printStackTrace();
+                        }
+
+                        logger.info(String.format("removed cert for registry:%s", hosts));
+                    }
+                });
+
+        logger.info("Start informer...");
+        factory.startAllRegisteredInformers();
     }
 
-    private static void deleteBaseDirectory() throws IOException {
-        // Delete Image Directory
-        Path path = Paths.get(Constants.DOCKER_CERT_DIR);
-        if (path != null && deleteFile(path.toFile())) {
-            logger.info("Directory deleted: " + Constants.DOCKER_CERT_DIR);
-        } else {
-            logger.info("Directory doesn't exist: " + Constants.DOCKER_CERT_DIR);
-        }
-    }
+    private static void createDockerBaseCertDirectory() throws IOException {
+        Path dockerBaseDir = Paths.get(DOCKER_CONF_BASE);
+        Path dockerCertDir = Paths.get(DOCKER_CERT_BASE);
 
-    private static String createBaseDirectory() throws IOException {
-        Path dockerHome = Paths.get(Constants.DOCKER_DIR);
-        if (!Files.exists(dockerHome)) {
-            Files.createDirectory(dockerHome);
-            logger.info("Directory created: " + Constants.DOCKER_DIR);
+        if (!Files.exists(dockerBaseDir)) {
+            Files.createDirectory(dockerBaseDir);
         }
 
-        Path dockerCertDir = Paths.get(Constants.DOCKER_CERT_DIR);
         if (!Files.exists(dockerCertDir)) {
             Files.createDirectory(dockerCertDir);
-            logger.info("Directory created: " + Constants.DOCKER_CERT_DIR);
+            logger.info("created: " + DOCKER_CERT_BASE);
         }
-
-        return dockerCertDir.toString();
     }
 
-    private static String createDirectory(String dirPath) throws IOException {
-        Path dir = Paths.get(dirPath);
-        if (!Files.exists(dir)) {
-            Files.createDirectory(dir);
-            logger.info("Directory created: " + dirPath);
+    public static List<String> getHostsFrom(V1Secret secret) {
+        List<String> hosts = new ArrayList<>();
+
+        if (secret.getData().containsKey("REGISTRY_IP_PORT")) {
+            hosts.add(new String(secret.getData().get("REGISTRY_IP_PORT")));
+        }
+        if (secret.getData().containsKey("PORT") && secret.getData().containsKey("CLUSTER_IP")) {
+            hosts.add(new String(secret.getData().get("CLUSTER_IP")) + ":" + new String(secret.getData().get("PORT")));
+        }
+        if (secret.getData().containsKey("PORT") && secret.getData().containsKey("LB_IP")) {
+            hosts.add(new String(secret.getData().get("LB_IP")) + ":" + new String(secret.getData().get("PORT")));
+        }
+        if (secret.getData().containsKey("PORT") && secret.getData().containsKey("DOMAIN_NAME")) {
+            hosts.add(new String(secret.getData().get("DOMAIN_NAME")) + ":" + new String(secret.getData().get("PORT")));
         }
 
-        return dirPath;
+        return hosts;
     }
 
+    public static Map<String, byte[]> getCertsFrom(V1Secret secret) {
+        Map<String, byte[]> certs = new HashMap<>();
 
-    public static boolean deleteFile(File file) throws IOException {
-        if (file.isDirectory()) {
-            //directory is empty, then delete it
-            if (file.list().length == 0) {
-                file.delete();
+        certs.put(CERT_KEY_FILENAME, secret.getData().get(CERT_KEY_FILENAME));
+        certs.put(CERT_CERT_FILENAME, secret.getData().get(CERT_CERT_FILENAME));
+        certs.put(CERT_CRT_FILENAME, secret.getData().get(CERT_CRT_FILENAME));
 
-            } else {
+        return certs;
+    }
 
-                //list all the directory contents
-                String files[] = file.list();
-
-                for (String temp : files) {
-                    //construct the file structure
-                    File fileDelete = new File(file, temp);
-
-                    //recursive delete
-                    deleteFile(fileDelete);
-                }
-
-                //check the directory again, if empty then delete it
-                if (file.list().length == 0) {
-                    file.delete();
-                }
+    public static void createDockerCert(List<String> hosts, Map<String, byte[]> certs) throws IOException {
+        for (String host : hosts) {
+            Path dirPath = Paths.get(DOCKER_CERT_BASE, host);
+            if (!Files.exists(dirPath)) {
+                Files.createDirectory(dirPath);
             }
 
-        } else {
-            //if file, then delete it
-            file.delete();
-        }
+            Path keyPath = Paths.get(dirPath.toString(), CERT_KEY_FILENAME);
+            Path certPath = Paths.get(dirPath.toString(), CERT_CERT_FILENAME);
+            Path crtPath = Paths.get(dirPath.toString(), CERT_CRT_FILENAME);
 
-        return true;
+            BufferedWriter keywriter = new BufferedWriter(new FileWriter(keyPath.toString()));
+            BufferedWriter certwriter = new BufferedWriter(new FileWriter(certPath.toString()));
+            BufferedWriter crtwriter = new BufferedWriter(new FileWriter(crtPath.toString()));
+
+            keywriter.write(new String(certs.get(CERT_KEY_FILENAME)));
+            certwriter.write(new String(certs.get(CERT_CERT_FILENAME)));
+            crtwriter.write(new String(certs.get(CERT_CRT_FILENAME)));
+        }
     }
 
+    public static void removeDockerCert(List<String> hosts) throws IOException {
+        for (String host : hosts) {
+            Path dirPath = Paths.get(DOCKER_CERT_BASE, host);
+            if (!Files.exists(dirPath)) {
+                continue;
+            }
+            File dir = dirPath.toFile();
+            if (!dir.isDirectory()) {
+                logger.warn("Something wrong... target path is not directory.");
+            }
+            for (String fname : dir.list()) {
+                new File(dir, fname).delete();
+            }
+            dir.delete();
+        }
+    }
 }
