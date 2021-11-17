@@ -1,0 +1,19 @@
+apiVersion: tmax.io/v1
+kind: Registry
+metadata:
+  name: lb-reg
+spec:
+  image: registry:2.6.2
+  loginId: tmax
+  loginPassword: tmax1234
+  persistentVolumeClaim:
+    create:
+      accessModes:
+       - ReadWriteMany
+      storageSize: 1G
+      storageClassName: rook-cephfs
+      deleteWithPvc: true
+  service:
+    loadBalancer:
+      port: 5000
+      serviceType: LoadBalancer
