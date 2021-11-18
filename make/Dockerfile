@@ -9,4 +9,4 @@ RUN apk update ; \
 
 WORKDIR /app
 
-CMD ["/usr/bin/java", "-jar", "-Dlogback.configurationFile=logback.xml","hypercloud4-secret-watcher.jar"]
+CMD ["/usr/bin/java", "-jar", "secret-watcher.jar"]

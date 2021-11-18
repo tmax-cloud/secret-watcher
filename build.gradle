@@ -7,17 +7,20 @@
  */
 
 plugins {
-    // Apply the java-library plugin to add support for Java Library
-    id 'java-library'
-}
-
-repositories {
-    mavenCentral()
+    id 'application'
 }
 
 java {
     sourceCompatibility(JavaVersion.VERSION_1_8)
     targetCompatibility(JavaVersion.VERSION_1_8)
+}
+
+application {
+    mainClass = 'com.tmaxcloud.hypercloud4.secretwatcher.Main'
+}
+
+repositories {
+    mavenCentral()
 }
 
 dependencies {
@@ -32,17 +35,16 @@ dependencies {
 }
 
 jar {
-    archiveName "hypercloud4-secret-watcher.jar"
+    from {
+        configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
+    }
+
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     exclude("META-INF/*.SF")
     exclude("META-INF/*.DSA")
     exclude("META-INF/*.RSA")
 
-    from {
-        configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
-    }
-
     manifest {
-        attributes 'Main-Class': 'registrywatcher.MainWatcher'
+        attributes 'Main-Class': 'com.tmaxcloud.hypercloud4.secretwatcher.Main'
     }
 }

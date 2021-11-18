@@ -1,4 +1,4 @@
-package registrywatcher;
+package com.tmaxcloud.hypercloud4.secretwatcher;
 
 import java.io.*;
 import java.nio.file.Files;
@@ -10,6 +10,7 @@ import java.util.concurrent.TimeUnit;
 import io.kubernetes.client.informer.ResourceEventHandler;
 import io.kubernetes.client.informer.SharedIndexInformer;
 import io.kubernetes.client.informer.SharedInformerFactory;
+import io.kubernetes.client.informer.cache.Lister;
 import io.kubernetes.client.util.*;
 import okhttp3.OkHttpClient;
 import org.slf4j.Logger;
@@ -21,8 +22,8 @@ import io.kubernetes.client.openapi.apis.CoreV1Api;
 import io.kubernetes.client.openapi.models.V1Secret;
 import io.kubernetes.client.openapi.models.V1SecretList;
 
-public class MainWatcher {
-    final static Logger logger = LoggerFactory.getLogger(MainWatcher.class);
+public class Main {
+    final static Logger logger = LoggerFactory.getLogger(Main.class);
 
     final static String DOCKER_CONF_BASE = "/etc/docker";
     final static String DOCKER_CERT_BASE = "/etc/docker/certs.d";
@@ -32,10 +33,10 @@ public class MainWatcher {
     final static String CERT_CERT_FILENAME = "localhub.cert";
 
     public static void main(String[] args) throws Exception {
-        logger.info("Initialize docker cert directory...");
-        createDockerBaseCertDirectory();
 
-        logger.info("Initialize k8s client");
+        createBaseDockerCertDirectory();
+
+        logger.info("init client...");
         ApiClient apiClient = Config.defaultClient();
         OkHttpClient httpClient = apiClient.getHttpClient().newBuilder().readTimeout(0, TimeUnit.SECONDS).build();
         apiClient.setHttpClient(httpClient);
@@ -43,7 +44,7 @@ public class MainWatcher {
         Configuration.setDefaultApiClient(apiClient);
         CoreV1Api coreV1Api = new CoreV1Api();
 
-        logger.info("Initialize V1Core Secret informer");
+        logger.info("init informer...");
         SharedInformerFactory factory = new SharedInformerFactory();
         SharedIndexInformer<V1Secret> secretInformer =
                 factory.sharedIndexInformerFor(
@@ -69,16 +70,15 @@ public class MainWatcher {
                     @Override
                     public void onAdd(V1Secret secret) {
                         List<String> hosts = getHostsFrom(secret);
-                        Map<String, byte[]> certs = getCertsFrom(secret);
+                        Map<String, String> certs = getCertsFrom(secret);
                         try {
-                            removeDockerCert(hosts);
-                            createDockerCert(hosts, certs);
+                            removeDockerCertFiles(hosts);
+                            createDockerCertFiles(hosts, certs);
                         } catch (IOException e) {
-                            logger.error("Failed to create docker cert");
+                            logger.error("Failed to create certs");
                             e.printStackTrace();
                         }
-
-                        logger.info(String.format("added cert for registry:%s", hosts));
+                        logger.info(String.format("added certs for %s", hosts));
                     }
 
                     @Override
@@ -92,21 +92,21 @@ public class MainWatcher {
                     public void onDelete(V1Secret secret, boolean deletedFinalStateUnknown) {
                         List<String> hosts = getHostsFrom(secret);
                         try {
-                            removeDockerCert(hosts);
+                            removeDockerCertFiles(hosts);
                         } catch (IOException e) {
-                            logger.error("Failed to remove docker cert");
+                            logger.error("Failed to remove certs");
                             e.printStackTrace();
                         }
-
-                        logger.info(String.format("removed cert for registry:%s", hosts));
+                        logger.info(String.format("removed certs for %s", hosts));
                     }
                 });
 
-        logger.info("Start informer...");
+        logger.info("start informer...");
         factory.startAllRegisteredInformers();
     }
 
-    private static void createDockerBaseCertDirectory() throws IOException {
+    private static void createBaseDockerCertDirectory() throws IOException {
+        logger.info(String.format("refresh base directory for docker cert(%s)...", DOCKER_CERT_BASE));
         Path dockerBaseDir = Paths.get(DOCKER_CONF_BASE);
         Path dockerCertDir = Paths.get(DOCKER_CERT_BASE);
 
@@ -116,7 +116,7 @@ public class MainWatcher {
 
         if (!Files.exists(dockerCertDir)) {
             Files.createDirectory(dockerCertDir);
-            logger.info("created: " + DOCKER_CERT_BASE);
+            logger.trace("created: " + DOCKER_CERT_BASE);
         }
     }
 
@@ -139,17 +139,17 @@ public class MainWatcher {
         return hosts;
     }
 
-    public static Map<String, byte[]> getCertsFrom(V1Secret secret) {
-        Map<String, byte[]> certs = new HashMap<>();
+    public static Map<String, String> getCertsFrom(V1Secret secret) {
+        Map<String, String> certs = new HashMap<>();
 
-        certs.put(CERT_KEY_FILENAME, secret.getData().get(CERT_KEY_FILENAME));
-        certs.put(CERT_CERT_FILENAME, secret.getData().get(CERT_CERT_FILENAME));
-        certs.put(CERT_CRT_FILENAME, secret.getData().get(CERT_CRT_FILENAME));
+        certs.put(CERT_KEY_FILENAME, new String(secret.getData().get(CERT_KEY_FILENAME)));
+        certs.put(CERT_CERT_FILENAME, new String(secret.getData().get(CERT_CERT_FILENAME)));
+        certs.put(CERT_CRT_FILENAME, new String(secret.getData().get(CERT_CRT_FILENAME)));
 
         return certs;
     }
 
-    public static void createDockerCert(List<String> hosts, Map<String, byte[]> certs) throws IOException {
+    public static void createDockerCertFiles(List<String> hosts, Map<String, String> certs) throws IOException {
         for (String host : hosts) {
             Path dirPath = Paths.get(DOCKER_CERT_BASE, host);
             if (!Files.exists(dirPath)) {
@@ -164,13 +164,17 @@ public class MainWatcher {
             BufferedWriter certwriter = new BufferedWriter(new FileWriter(certPath.toString()));
             BufferedWriter crtwriter = new BufferedWriter(new FileWriter(crtPath.toString()));
 
-            keywriter.write(new String(certs.get(CERT_KEY_FILENAME)));
-            certwriter.write(new String(certs.get(CERT_CERT_FILENAME)));
-            crtwriter.write(new String(certs.get(CERT_CRT_FILENAME)));
+            keywriter.write(certs.get(CERT_KEY_FILENAME));
+            certwriter.write(certs.get(CERT_CERT_FILENAME));
+            crtwriter.write(certs.get(CERT_CRT_FILENAME));
+
+            keywriter.flush();
+            certwriter.flush();
+            crtwriter.flush();
         }
     }
 
-    public static void removeDockerCert(List<String> hosts) throws IOException {
+    public static void removeDockerCertFiles(List<String> hosts) throws IOException {
         for (String host : hosts) {
             Path dirPath = Paths.get(DOCKER_CERT_BASE, host);
             if (!Files.exists(dirPath)) {
@@ -178,12 +182,14 @@ public class MainWatcher {
             }
             File dir = dirPath.toFile();
             if (!dir.isDirectory()) {
-                logger.warn("Something wrong... target path is not directory.");
+                logger.warn(String.format("target path(%s) is not directory."), dir);
             }
             for (String fname : dir.list()) {
                 new File(dir, fname).delete();
             }
-            dir.delete();
+            if (!dir.delete()) {
+                logger.warn(String.format("failed to remove directory(%s)", dir));
+            }
         }
     }
 }
