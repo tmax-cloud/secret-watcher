@@ -45,7 +45,12 @@ push-image:
 
 .PHONY: run
 run:
-	@$(DOCKERRUN) --name secretwatcher -it --rm  -v /etc/docker/certs.d:/etc/docker/certs.d -v "${HOME}/.kube/":/kube -e KUBECONFIG=/kube/config $(DOCKER_IMAGE_NAME):$(VERSIONTAG)
+	@$(DOCKERRUN) --name secretwatcher -it --rm  \
+		-v /etc/docker/certs.d:/etc/docker/certs.d \
+		-v "${HOME}/.kube/":/kube \
+		-e KUBECONFIG=/kube/config \
+		-e LOGLEVEL=TRACE \
+		$(DOCKER_IMAGE_NAME):$(VERSIONTAG)
 
 .PHONY: smoke
 smoke: build run
