@@ -48,20 +48,18 @@ public class Main {
         SharedInformerFactory factory = new SharedInformerFactory();
         SharedIndexInformer<V1Secret> secretInformer =
                 factory.sharedIndexInformerFor(
-                        (CallGeneratorParams params) -> {
-                            return coreV1Api.listSecretForAllNamespacesCall(
-                                    null,
-                                    null,
-                                    null,
-                                    "secret=cert",
-                                    null,
-                                    null,
-                                    params.resourceVersion,
-                                    null,
-                                    params.timeoutSeconds,
-                                    params.watch,
-                                    null);
-                        },
+                        (CallGeneratorParams params) -> coreV1Api.listSecretForAllNamespacesCall(
+                                null,
+                                null,
+                                null,
+                                "secret=cert",
+                                null,
+                                null,
+                                params.resourceVersion,
+                                null,
+                                params.timeoutSeconds,
+                                params.watch,
+                                null),
                         V1Secret.class,
                         V1SecretList.class);
 
@@ -83,9 +81,13 @@ public class Main {
 
                     @Override
                     public void onUpdate(V1Secret oldSecret, V1Secret newSecret) {
-                        logger.info(String.format(
-                                "%s => %s secret updated!\n",
-                                oldSecret.getMetadata().getName(), newSecret.getMetadata().getName()));
+                        try {
+                            logger.info(String.format(
+                                    "%s => %s secret updated!\n",
+                                    oldSecret.getMetadata().getName(), newSecret.getMetadata().getName()));
+                        } catch (NullPointerException e) {
+                            logger.error("failed to get secret name");
+                        }
                     }
 
                     @Override
@@ -103,6 +105,25 @@ public class Main {
 
         logger.info("start informer...");
         factory.startAllRegisteredInformers();
+
+        logger.info("register clean up handler...");
+        Thread cleanCertsHook = new Thread(() -> {
+            logger.info("start clean up certs...");
+            Lister<V1Secret> secretLister = new Lister<>(secretInformer.getIndexer());
+            List<V1Secret> secrets = secretLister.list();
+            for (V1Secret secret : secrets) {
+                List<String> hosts = getHostsFrom(secret);
+                try {
+                    removeDockerCertFiles(hosts);
+                } catch (IOException e) {
+                    logger.error("Failed to remove certs");
+                    e.printStackTrace();
+                }
+                logger.info(String.format("removed certs for %s", hosts));
+            }
+            logger.info("done clean up certs...");
+        });
+        Runtime.getRuntime().addShutdownHook(cleanCertsHook);
     }
 
     private static void createBaseDockerCertDirectory() throws IOException {
@@ -123,17 +144,22 @@ public class Main {
     public static List<String> getHostsFrom(V1Secret secret) {
         List<String> hosts = new ArrayList<>();
 
-        if (secret.getData().containsKey("REGISTRY_IP_PORT")) {
-            hosts.add(new String(secret.getData().get("REGISTRY_IP_PORT")));
-        }
-        if (secret.getData().containsKey("PORT") && secret.getData().containsKey("CLUSTER_IP")) {
-            hosts.add(new String(secret.getData().get("CLUSTER_IP")) + ":" + new String(secret.getData().get("PORT")));
-        }
-        if (secret.getData().containsKey("PORT") && secret.getData().containsKey("LB_IP")) {
-            hosts.add(new String(secret.getData().get("LB_IP")) + ":" + new String(secret.getData().get("PORT")));
-        }
-        if (secret.getData().containsKey("PORT") && secret.getData().containsKey("DOMAIN_NAME")) {
-            hosts.add(new String(secret.getData().get("DOMAIN_NAME")) + ":" + new String(secret.getData().get("PORT")));
+        try {
+            if (secret.getData().containsKey("REGISTRY_IP_PORT")) {
+                hosts.add(new String(secret.getData().get("REGISTRY_IP_PORT")));
+            }
+            if (secret.getData().containsKey("PORT") && secret.getData().containsKey("CLUSTER_IP")) {
+                hosts.add(new String(secret.getData().get("CLUSTER_IP")) + ":" + new String(secret.getData().get("PORT")));
+            }
+            if (secret.getData().containsKey("PORT") && secret.getData().containsKey("LB_IP")) {
+                hosts.add(new String(secret.getData().get("LB_IP")) + ":" + new String(secret.getData().get("PORT")));
+            }
+            if (secret.getData().containsKey("PORT") && secret.getData().containsKey("DOMAIN_NAME")) {
+                hosts.add(new String(secret.getData().get("DOMAIN_NAME")) + ":" + new String(secret.getData().get("PORT")));
+            }
+        } catch (NullPointerException e) {
+            logger.error(String.format("failed to get key from secret: %s", secret.getMetadata().getName()));
+            e.printStackTrace();
         }
 
         return hosts;
@@ -141,11 +167,14 @@ public class Main {
 
     public static Map<String, String> getCertsFrom(V1Secret secret) {
         Map<String, String> certs = new HashMap<>();
-
-        certs.put(CERT_KEY_FILENAME, new String(secret.getData().get(CERT_KEY_FILENAME)));
-        certs.put(CERT_CERT_FILENAME, new String(secret.getData().get(CERT_CERT_FILENAME)));
-        certs.put(CERT_CRT_FILENAME, new String(secret.getData().get(CERT_CRT_FILENAME)));
-
+        try {
+            certs.put(CERT_KEY_FILENAME, new String(secret.getData().get(CERT_KEY_FILENAME)));
+            certs.put(CERT_CERT_FILENAME, new String(secret.getData().get(CERT_CERT_FILENAME)));
+            certs.put(CERT_CRT_FILENAME, new String(secret.getData().get(CERT_CRT_FILENAME)));
+        } catch (NullPointerException e) {
+            logger.error(String.format("failed to get key from secret: %s", secret.getMetadata().getName()));
+            e.printStackTrace();
+        }
         return certs;
     }
 
@@ -182,13 +211,15 @@ public class Main {
             }
             File dir = dirPath.toFile();
             if (!dir.isDirectory()) {
-                logger.warn(String.format("target path(%s) is not directory."), dir);
+                logger.warn(String.format("target path(%s) is not directory.", dir));
             }
             for (String fname : dir.list()) {
-                new File(dir, fname).delete();
+                if (!new File(dir, fname).delete()) {
+                    logger.error(String.format("failed to delete file: %s", fname));
+                }
             }
             if (!dir.delete()) {
-                logger.warn(String.format("failed to remove directory(%s)", dir));
+                logger.error(String.format("failed to remove directory: %s", dir));
             }
         }
     }
