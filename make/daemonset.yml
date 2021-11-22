@@ -93,7 +93,7 @@ spec:
     spec:
       containers:
       - name: hypercloud4-secret-watcher
-        image: tmaxcloudck/hypercloud4-secret-watcher:b4.1.0.10a
+        image: tmaxcloudck/hypercloud4-secret-watcher:b4.1.1
         imagePullPolicy: Always
         env:
         - name: TZ

@@ -19,7 +19,7 @@ DOCKERRUN=$(DOCKERCMD) run
 
 REGISTRYSERVER=
 DOCKER_IMAGE_NAME=tmaxcloudck/hypercloud4-secret-watcher
-VERSIONTAG=b4.1.0.10a
+VERSIONTAG=b4.1.0.1
 
 # pull/push image
 PUSHSCRIPTPATH=$(MAKEPATH)

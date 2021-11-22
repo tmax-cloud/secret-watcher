@@ -1,5 +1,28 @@
-# HyperCloudSecretWatcher changelog!!
+# Changelog
 All notable changes to this project will be documented in this file.
+
+<!-------------------- v4.1.1 start -------------------->
+
+## HyperCloudSecretWatcher_4.1.1 (2021년 11월 18일 목 오전  11:40)
+
+### Added
+- Add clean up certs handler on exit
+- Add Makefile for automation
+- Add environment variable(LOGLEVEL) for setup logger level
+
+### Changed
+- Use SharedInformer instance for watching secret instead of Watcher directly.
+- Remove unnecessary class and thread
+- Change directory structure
+- Remove file logger
+
+### Fixed
+
+### CRD yaml
+
+### Etc
+
+<!--------------------- v4.1.1 end --------------------->
 
 <!-------------------- v4.1.0.10 start -------------------->
 
